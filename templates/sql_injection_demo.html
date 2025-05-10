@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}SQL Injection Demo{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>SQL Injection Demonstration</h1>
+    
+    <div class="alert alert-danger">
+        <strong>Warning:</strong> This is a demonstration of a security vulnerability. Never use string formatting in SQL queries with user input!
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            Vulnerable Query
+        </div>
+        <div class="card-body">
+            <pre><code>{{ query }}</code></pre>
+        </div>
+    </div>
+
+    <h3>Results (Users exposed by SQL injection):</h3>
+    
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Password Hash</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in results %}
+            <tr>
+                <td>{{ user.id }}</td>
+                <td>{{ user.username }}</td>
+                <td>{{ user.email }}</td>
+                <td>{{ user.password }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %} 

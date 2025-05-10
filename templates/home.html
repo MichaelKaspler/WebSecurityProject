@@ -1,8 +1,29 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="welcome">
-    <h2>Welcome, {{ username }}!</h2>
-    <p>You have successfully logged in.</p>
+<div class="container mt-4">
+    <div class="welcome">
+        <h2>Welcome, {{ username }}!</h2>
+        <p>You have successfully logged in.</p>
+    </div>
+    
+    <div class="card mt-4">
+        <div class="card-header bg-warning text-dark">
+            Security Vulnerability Demonstrations
+        </div>
+        <div class="card-body">
+            <p class="text-danger">Warning: These demonstrations show common web security vulnerabilities.</p>
+            <div class="list-group">
+                <a href="{{ url_for('sql_injection_route') }}" class="list-group-item list-group-item-action">
+                    <h5>SQL Injection Demo</h5>
+                    <p class="mb-1">See how SQL injection can expose your database.</p>
+                </a>
+                <a href="{{ url_for('xss_demo') }}" class="list-group-item list-group-item-action">
+                    <h5>Cross-Site Scripting (XSS) Demo</h5>
+                    <p class="mb-1">See how XSS can be used to execute malicious JavaScript.</p>
+                </a>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %} 

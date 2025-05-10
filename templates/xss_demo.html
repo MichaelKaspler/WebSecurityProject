@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}XSS Attack Demonstration{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Cross-Site Scripting (XSS) Demonstration</h1>
+    
+    <div class="alert alert-danger">
+        <strong>Warning:</strong> This is a demonstration of a security vulnerability. Never render unescaped user input in a real application!
+    </div>
+
+    <!-- Vulnerable Section - This deliberately renders the name without escaping -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            Vulnerable Output (Renders unescaped user input from URL query parameter)
+        </div>
+        <div class="card-body">
+            <p>Hello, {{ name|safe }}!</p>
+            <p class="text-muted">Note: The |safe filter deliberately disables Jinja2's automatic HTML escaping, making this vulnerable to XSS.</p>
+        </div>
+    </div>
+
+    <!-- Example Payloads -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            Example XSS Payloads
+        </div>
+        <div class="card-body">
+            <h5>Basic Alert</h5>
+            <pre><code>{{ payloads.basic_alert }}</code></pre>
+            <p>Try it: <a href="{{ example_url }}" target="_blank">Click to test</a></p>
+            
+            <h5>Cookie Stealer (Conceptual)</h5>
+            <pre><code>{{ payloads.cookie_stealer }}</code></pre>
+            
+            <h5>DOM Manipulator</h5>
+            <pre><code>{{ payloads.dom_manipulator }}</code></pre>
+        </div>
+    </div>
+
+    <!-- Vulnerable Code Patterns -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            Common Vulnerable Code Patterns
+        </div>
+        <div class="card-body">
+            <h5>Direct Output in Flask</h5>
+            <pre><code>{{ vulnerable_code.direct_output }}</code></pre>
+            
+            <h5>Unsafe innerHTML Usage</h5>
+            <pre><code>{{ vulnerable_code.innerHTML }}</code></pre>
+            
+            <h5>Dangerous eval() Usage</h5>
+            <pre><code>{{ vulnerable_code.eval_usage }}</code></pre>
+        </div>
+    </div>
+
+    <!-- Safe Alternatives -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            Safe Alternatives
+        </div>
+        <div class="card-body">
+            <h5>Always Escape HTML in Templates</h5>
+            <p>Hello, {{ name }}</p>
+            <p class="text-muted">Note: By default, Jinja2 escapes HTML. The above line renders the same input safely.</p>
+            
+            <h5>Use Safe DOM Methods</h5>
+            <pre><code>document.getElementById('username').textContent = userName;</code></pre>
+            
+            <h5>Avoid eval() and Function()</h5>
+            <pre><code>// Instead of eval, use safer alternatives
+console.log(`Welcome, ${userName}!`);</code></pre>
+        </div>
+    </div>
+</div>
+{% endblock %} 
