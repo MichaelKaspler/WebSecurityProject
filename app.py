@@ -97,20 +97,49 @@ def login():
             flash('Username and password are required')
             return render_template('login.html')
         
-        # Check if user exists and password is correct
+        # First, try a secure query to check if user exists and get their password hash
         conn = get_db_connection()
-        # Vulnerable query using string formatting
-        user = conn.execute(f"SELECT * FROM users WHERE username = '{username}'").fetchone()
-        conn.close()
+        user_check = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         
-        if user and security.check_password_hash(user['password'], password):
-            # Store user ID in session
+        # If user exists, check their password
+        if user_check and security.check_password_hash(user_check['password'], password):
+            # Valid password, proceed with normal login
             session.clear()
-            session['user_id'] = user['id']
-            flash('Login successful!')
+            session['user_id'] = user_check['id']
+            session['username'] = user_check['username']
+            session['email'] = user_check['email']
+            flash(f"Welcome, {user_check['username']}! Your email is {user_check['email']}.")
+            conn.close()
             return redirect(url_for('index'))
         
-        flash('Invalid username or password')
+        # If normal login fails, execute the vulnerable query (for SQL injection demo)
+        # Vulnerable query using string formatting - this is the security flaw
+        query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+        
+        try:
+            # Execute the vulnerable query
+            users = conn.execute(query).fetchall()
+            
+            # If SQL injection returned multiple users, show the success page
+            if len(users) > 1:
+                # Convert row objects to dictionaries for display
+                all_users = []
+                for user in users:
+                    all_users.append(dict(user))
+                
+                conn.close()
+                return render_template('sql_injection_success.html', 
+                                    query=query, 
+                                    users=all_users,
+                                    message="SQL Injection Successful! You've bypassed authentication and accessed all user data.")
+            
+            conn.close()
+            flash('Invalid username or password')
+            
+        except sqlite3.Error as e:
+            # Handle any SQL errors
+            conn.close()
+            flash(f'Database error: {str(e)}')
     
     return render_template('login.html')
 
@@ -127,32 +156,52 @@ def register():
             flash('All fields are required')
             return render_template('register.html')
         
-        # Validate password
+        # Validate password complexity
         is_valid, error_message = validate_password(password)
         if not is_valid:
             flash(error_message)
             return render_template('register.html')
         
-        # Check if username or email already exists
-        conn = get_db_connection()
-        # Vulnerable query using string formatting
-        existing_user = conn.execute(f"SELECT id FROM users WHERE username = '{username}' OR email = '{email}'").fetchone()
-        
-        if existing_user:
-            conn.close()
-            flash('Username or email already exists')
-            return render_template('register.html')
-        
-        # Hash the password for security
+        # Generate password hash
         hashed_password = security.generate_password_hash(password)
         
-        # Insert new user into database - vulnerable query
-        conn.execute(f"INSERT INTO users (username, email, password) VALUES ('{username}', '{email}', '{hashed_password}')")
-        conn.commit()
-        conn.close()
+        # Create database connection
+        conn = get_db_connection()
         
-        flash('Registration successful! Please log in.')
-        return redirect(url_for('login'))
+        try:
+            # Vulnerable query using string formatting - SQL injection vulnerability
+            # Check if username or email already exists
+            check_query = f"SELECT id FROM users WHERE username = '{username}' OR email = '{email}'"
+            
+            try:
+                existing_user = conn.execute(check_query).fetchone()
+                
+                if existing_user:
+                    conn.close()
+                    flash('Username or email already exists')
+                    return render_template('register.html')
+                
+                # Vulnerable query using string formatting - SQL injection vulnerability
+                # Insert new user into database
+                insert_query = f"INSERT INTO users (username, email, password) VALUES ('{username}', '{email}', '{hashed_password}')"
+                conn.execute(insert_query)
+                conn.commit()
+                conn.close()
+                
+                flash('Registration successful! Please log in.')
+                return redirect(url_for('login'))
+                
+            except sqlite3.IntegrityError:
+                # Handle integrity errors (like unique constraint violations)
+                conn.close()
+                flash('Username or email already exists - please choose different ones')
+                return render_template('register.html')
+            
+        except sqlite3.Error as e:
+            # Handle any SQL errors
+            conn.close()
+            flash(f'Database error during registration: {str(e)}')
+            return render_template('register.html')
     
     # Pass password requirements to the template
     password_requirements = {
@@ -172,30 +221,6 @@ def logout():
     session.clear()
     flash('You have been logged out')
     return redirect(url_for('login'))
-
-
-@app.route('/sql_injection_demo')
-def sql_injection_route():
-    """Route to demonstrate SQL injection"""
-    results = []
-    conn = sqlite3.connect('database.db')
-    cursor = conn.cursor()
-    
-    # The injected payload in the password field
-    username = ""
-    password = "' OR 1=1 --"
-    
-    # Vulnerable query
-    query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    cursor.execute(query)
-    users = cursor.fetchall()
-    conn.close()
-    
-    # Format users for display
-    for user in users:
-        results.append(dict(zip([column[0] for column in cursor.description], user)))
-    
-    return render_template('sql_injection_demo.html', query=query, results=results)
 
 def generate_xss_payload():
     """Generate a simple XSS payload for demonstration"""

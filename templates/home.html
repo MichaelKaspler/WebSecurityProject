@@ -2,11 +2,13 @@
 
 {% block content %}
 <div class="container mt-4">
+    {% if 'username' in session and 'email' in session %}
     <div class="welcome">
-        <h2>Welcome, {{ username }}!</h2>
+        <h2>Welcome, {{ session['username'] }}!</h2>
         <p>You have successfully logged in.</p>
+        <p>Your email: {{ session['email'] }}</p>
     </div>
-    
+    {% endif %}
     <div class="card mt-4">
         <div class="card-header bg-warning text-dark">
             Security Vulnerability Demonstrations
@@ -14,10 +16,16 @@
         <div class="card-body">
             <p class="text-danger">Warning: These demonstrations show common web security vulnerabilities.</p>
             <div class="list-group">
-                <a href="{{ url_for('sql_injection_route') }}" class="list-group-item list-group-item-action">
+                <div class="list-group-item list-group-item-action">
                     <h5>SQL Injection Demo</h5>
-                    <p class="mb-1">See how SQL injection can expose your database.</p>
-                </a>
+                    <p class="mb-1">To test SQL injection authentication bypass, log out and then login with:</p>
+                    <ul>
+                        <li><strong>Username:</strong> <code>any username</code></li>
+                        <li><strong>Password:</strong> <code>' OR 1=1 --</code></li>
+                    </ul>
+                    <p>This bypasses authentication by making the WHERE clause always true.</p>
+                    <a href="{{ url_for('logout') }}" class="btn btn-outline-primary btn-sm">Logout to Try</a>
+                </div>
                 <a href="{{ url_for('xss_demo') }}" class="list-group-item list-group-item-action">
                     <h5>Cross-Site Scripting (XSS) Demo</h5>
                     <p class="mb-1">See how XSS can be used to execute malicious JavaScript.</p>
@@ -26,4 +34,4 @@
         </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}
