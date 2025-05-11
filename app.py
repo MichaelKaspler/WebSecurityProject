@@ -79,7 +79,8 @@ def index():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     conn = get_db_connection()
-    user = conn.execute('SELECT username FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    # Vulnerable query using string formatting
+    user = conn.execute(f"SELECT username FROM users WHERE id = {session['user_id']}").fetchone()
     conn.close()
     
     return render_template('home.html', username=user['username'])
@@ -98,7 +99,8 @@ def login():
         
         # Check if user exists and password is correct
         conn = get_db_connection()
-        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        # Vulnerable query using string formatting
+        user = conn.execute(f"SELECT * FROM users WHERE username = '{username}'").fetchone()
         conn.close()
         
         if user and security.check_password_hash(user['password'], password):
@@ -133,8 +135,8 @@ def register():
         
         # Check if username or email already exists
         conn = get_db_connection()
-        existing_user = conn.execute('SELECT id FROM users WHERE username = ? OR email = ?', 
-                                    (username, email)).fetchone()
+        # Vulnerable query using string formatting
+        existing_user = conn.execute(f"SELECT id FROM users WHERE username = '{username}' OR email = '{email}'").fetchone()
         
         if existing_user:
             conn.close()
@@ -144,9 +146,8 @@ def register():
         # Hash the password for security
         hashed_password = security.generate_password_hash(password)
         
-        # Insert new user into database
-        conn.execute('INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-                    (username, email, hashed_password))
+        # Insert new user into database - vulnerable query
+        conn.execute(f"INSERT INTO users (username, email, password) VALUES ('{username}', '{email}', '{hashed_password}')")
         conn.commit()
         conn.close()
         
@@ -172,42 +173,6 @@ def logout():
     flash('You have been logged out')
     return redirect(url_for('login'))
 
-def vulnerable_login(username, password):
-    conn = sqlite3.connect('database.db')
-    cursor = conn.cursor()
-    # DANGEROUS: Directly formatting user input into SQL!
-    query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    cursor.execute(query)
-    user = cursor.fetchone()
-    conn.close()
-    return user
-
-
-def sql_injection_dump_users():
-    conn = sqlite3.connect('database.db')
-    cursor = conn.cursor()
-    # The injected payload in the password field
-    username = ""
-    password = "' OR 1=1 --"
-    # Vulnerable query
-    query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    print("Executing query:", query)
-    cursor.execute(query)
-    users = cursor.fetchall()
-    conn.close()
-    # Print all users returned by the injection
-    for user in users:
-        print(dict(user)) 
-
-def sql_injection_attack():
-    # This payload will always return True for the password check
-    username = ""
-    password = "' OR 1=1 --"
-    user = vulnerable_login(username, password)
-    if user:
-        print("SQL Injection succeeded! User data:", user)
-    else:
-        print("SQL Injection failed.")
 
 @app.route('/sql_injection_demo')
 def sql_injection_route():
