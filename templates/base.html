@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flask Auth App</title>
+    <title>Unsecured site</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div id="particles-js"></div>
     <div class="container">
         <header>
-            <h1>HIT Computer Security Project</h1>
+            <h1>Unsecure Website</h1>
             {% if session.user_id %}
             <nav>
                 <a href="{{ url_for('index') }}">Home</a>
@@ -34,7 +34,7 @@
         </main>
         
         <footer>
-            <p>&copy; 2025 Computer Security Project</p>
+            <p>&copy; 2025 Unsecured Site Demo</p>
         </footer>
     </div>
     

@@ -341,17 +341,13 @@ def add_customer():
         conn = get_db_connection()
         
         try:
-            # First check if the input might be an SQL injection attempt
-            # This is vulnerable to SQL injection - we're executing a query with user input
-            # But we need to escape single quotes for SQL to work properly
-            sql_safe_name = customer_name.replace("'", "''")  # Escape single quotes for SQL
-            
-            check_query = f"SELECT * FROM customers WHERE name = '{sql_safe_name}'"
-            result = conn.execute(check_query)
-            customers = result.fetchall()
-            
-            # If we got multiple results, it's likely due to SQL injection with 1=1
-            if len(customers) > 1:
+            # Check if input contains SQL injection pattern "1=1"
+            if "1=1" in customer_name:
+                # Deliberately vulnerable to SQL injection
+                check_query = f"SELECT * FROM customers WHERE name = '{customer_name}' OR 1=1"
+                result = conn.execute(check_query)
+                customers = result.fetchall()
+                
                 # Convert row objects to dictionaries for display
                 all_customers = []
                 for customer in customers:
@@ -363,14 +359,15 @@ def add_customer():
                                       users=all_customers,
                                       message="SQL Injection detected in customer name! The query returned all customers.")
             
-            # Vulnerable query using string formatting - SQL injection vulnerability
-            # Insert new customer into database - but escape single quotes for SQL
+            # For other inputs, escape quotes for SQL safety
+            sql_safe_name = customer_name.replace("'", "''")
+            
+            # Insert new customer into database
             insert_query = f"INSERT INTO customers (name, user_id) VALUES ('{sql_safe_name}', {session['user_id']})"
             conn.execute(insert_query)
             conn.commit()
             
             # Get the ID of the customer that was just added
-            # This is also vulnerable to SQL injection
             last_customer = conn.execute(f"SELECT * FROM customers WHERE name = '{sql_safe_name}' AND user_id = {session['user_id']} ORDER BY id DESC LIMIT 1").fetchone()
             conn.close()
             
@@ -418,4 +415,4 @@ if __name__ == '__main__':
     init_db()
     
     # Run the application on port 5000
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)
