@@ -14,13 +14,41 @@ def get_db_connection():
     return conn
 
 def init_db():
-    if not os.path.exists('database.db'):
-        conn = get_db_connection()
-        with open('schema.sql') as f:
-            conn.executescript(f.read())
-        conn.commit()
-        conn.close()
-        print("Database initialized successfully")
+    """Initialize the database with the schema"""
+    conn = get_db_connection()
+    
+    # Check if customers table exists
+    table_exists = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='customers'").fetchone()
+    
+    # If the database file exists but the customers table doesn't, add it
+    if not table_exists:
+        try:
+            # Create only the customers table if it doesn't exist
+            conn.execute('''
+            CREATE TABLE IF NOT EXISTS customers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+            ''')
+            conn.commit()
+            print("Customers table added to existing database")
+        except sqlite3.Error as e:
+            print(f"Error adding customers table: {e}")
+    
+    # If the database doesn't exist at all, initialize it with the full schema
+    if not os.path.exists('database.db') or not conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchone():
+        try:
+            with open('schema.sql') as f:
+                conn.executescript(f.read())
+            conn.commit()
+            print("Database initialized successfully with full schema")
+        except sqlite3.Error as e:
+            print(f"Error initializing database: {e}")
+    
+    conn.close()
 
 def validate_password(password):
     """
@@ -162,40 +190,49 @@ def register():
             flash(error_message)
             return render_template('register.html')
         
-        # Generate password hash
-        hashed_password = security.generate_password_hash(password)
-        
         # Create database connection
         conn = get_db_connection()
         
         try:
             # Vulnerable query using string formatting - SQL injection vulnerability
             # Check if username or email already exists
-            check_query = f"SELECT id FROM users WHERE username = '{username}' OR email = '{email}'"
+            check_query = f"SELECT * FROM users WHERE username = '{username}' OR email = '{email}'"
             
-            try:
-                existing_user = conn.execute(check_query).fetchone()
+            # Execute the vulnerable query
+            result = conn.execute(check_query)
+            users = result.fetchall()
+            
+            # If we got multiple results, it's likely due to SQL injection
+            if len(users) > 1:
+                # Convert row objects to dictionaries for display
+                all_users = []
+                for user in users:
+                    all_users.append(dict(user))
                 
-                if existing_user:
-                    conn.close()
-                    flash('Username or email already exists')
-                    return render_template('register.html')
-                
-                # Vulnerable query using string formatting - SQL injection vulnerability
-                # Insert new user into database
-                insert_query = f"INSERT INTO users (username, email, password) VALUES ('{username}', '{email}', '{hashed_password}')"
-                conn.execute(insert_query)
-                conn.commit()
                 conn.close()
-                
-                flash('Registration successful! Please log in.')
-                return redirect(url_for('login'))
-                
-            except sqlite3.IntegrityError:
-                # Handle integrity errors (like unique constraint violations)
+                return render_template('sql_injection_success.html', 
+                                      query=check_query, 
+                                      users=all_users,
+                                      message="SQL Injection detected during registration! The query returned all users.")
+            
+            # If we got exactly one user, it means the username or email exists
+            if len(users) == 1:
                 conn.close()
-                flash('Username or email already exists - please choose different ones')
+                flash('Username or email already exists')
                 return render_template('register.html')
+            
+            # If no users found, proceed with registration
+            # Generate password hash
+            hashed_password = security.generate_password_hash(password)
+            
+            # Insert new user into database - vulnerable to SQL injection
+            insert_query = f"INSERT INTO users (username, email, password) VALUES ('{username}', '{email}', '{hashed_password}')"
+            conn.execute(insert_query)
+            conn.commit()
+            conn.close()
+            
+            flash('Registration successful! Please log in.')
+            return redirect(url_for('login'))
             
         except sqlite3.Error as e:
             # Handle any SQL errors
@@ -261,6 +298,120 @@ def xss_demo():
                           payloads=payloads, 
                           vulnerable_code=vulnerable_code,
                           example_url=request.host_url + "xss_demo?name=" + payloads["basic_alert"])
+
+@app.route('/customers')
+def customers():
+    """View customers page"""
+    # Check if user is logged in
+    if 'user_id' not in session:
+        flash('You must be logged in to view customers')
+        return redirect(url_for('login'))
+    
+    # Get all customers for the current user
+    conn = get_db_connection()
+    # Vulnerable query using string formatting - SQL injection vulnerability
+    user_customers = conn.execute(f"SELECT * FROM customers WHERE user_id = {session['user_id']} ORDER BY created_at DESC").fetchall()
+    conn.close()
+    
+    # Convert row objects to dictionaries for the template
+    customers_list = []
+    for customer in user_customers:
+        customers_list.append(dict(customer))
+    
+    return render_template('customers.html', customers=customers_list)
+
+@app.route('/add_customer', methods=['GET', 'POST'])
+def add_customer():
+    """Add a new customer"""
+    # Check if user is logged in
+    if 'user_id' not in session:
+        flash('You must be logged in to add customers')
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        # Get customer name from form
+        customer_name = request.form['name']
+        
+        # Input validation
+        if not customer_name:
+            flash('Customer name is required')
+            return redirect(url_for('add_customer'))
+        
+        # Create database connection
+        conn = get_db_connection()
+        
+        try:
+            # First check if the input might be an SQL injection attempt
+            # This is vulnerable to SQL injection - we're executing a query with user input
+            # But we need to escape single quotes for SQL to work properly
+            sql_safe_name = customer_name.replace("'", "''")  # Escape single quotes for SQL
+            
+            check_query = f"SELECT * FROM customers WHERE name = '{sql_safe_name}'"
+            result = conn.execute(check_query)
+            customers = result.fetchall()
+            
+            # If we got multiple results, it's likely due to SQL injection with 1=1
+            if len(customers) > 1:
+                # Convert row objects to dictionaries for display
+                all_customers = []
+                for customer in customers:
+                    all_customers.append(dict(customer))
+                
+                conn.close()
+                return render_template('customer_sql_injection.html', 
+                                      query=check_query, 
+                                      users=all_customers,
+                                      message="SQL Injection detected in customer name! The query returned all customers.")
+            
+            # Vulnerable query using string formatting - SQL injection vulnerability
+            # Insert new customer into database - but escape single quotes for SQL
+            insert_query = f"INSERT INTO customers (name, user_id) VALUES ('{sql_safe_name}', {session['user_id']})"
+            conn.execute(insert_query)
+            conn.commit()
+            
+            # Get the ID of the customer that was just added
+            # This is also vulnerable to SQL injection
+            last_customer = conn.execute(f"SELECT * FROM customers WHERE name = '{sql_safe_name}' AND user_id = {session['user_id']} ORDER BY id DESC LIMIT 1").fetchone()
+            conn.close()
+            
+            if last_customer:
+                customer_id = last_customer['id']
+                flash('Customer added successfully!')
+                return redirect(url_for('view_customer', customer_id=customer_id))
+            else:
+                flash('Customer added but could not be retrieved')
+                return redirect(url_for('customers'))
+            
+        except sqlite3.Error as e:
+            # Handle any SQL errors
+            conn.close()
+            flash(f'Database error: {str(e)}')
+            return redirect(url_for('add_customer'))
+    
+    return render_template('add_customer.html')
+
+@app.route('/customer/<int:customer_id>')
+def view_customer(customer_id):
+    """View a specific customer"""
+    # Check if user is logged in
+    if 'user_id' not in session:
+        flash('You must be logged in to view customers')
+        return redirect(url_for('login'))
+    
+    # Get the specific customer
+    conn = get_db_connection()
+    # Vulnerable query using string formatting - SQL injection vulnerability
+    customer = conn.execute(f"SELECT * FROM customers WHERE id = {customer_id} AND user_id = {session['user_id']}").fetchone()
+    conn.close()
+    
+    if not customer:
+        flash('Customer not found or you do not have permission to view this customer')
+        return redirect(url_for('customers'))
+    
+    # Convert row object to dictionary for the template
+    customer_dict = dict(customer)
+    
+    return render_template('view_customer.html', customer=customer_dict)
 
 if __name__ == '__main__':
     # Initialize the database
