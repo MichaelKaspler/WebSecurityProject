@@ -10,9 +10,6 @@
     </div>
     
     <div class="card mt-4">
-        <div class="card-header bg-primary text-white">
-            Application Features
-        </div>
         <div class="card-body">
             <div class="list-group">
                 <a href="{{ url_for('add_customer') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
@@ -30,40 +27,5 @@
         </div>
     </div>
     {% endif %}
-    
-    <div class="card mt-4">
-        <div class="card-header bg-warning text-dark">
-            Security Vulnerability Demonstrations
-        </div>
-        <div class="card-body">
-            <p class="text-danger">Warning: These demonstrations show common web security vulnerabilities.</p>
-            <div class="list-group">
-                <div class="list-group-item list-group-item-action">
-                    <h5>SQL Injection Demo (Login Bypass)</h5>
-                    <p class="mb-1">To test SQL injection authentication bypass, log out and then login with:</p>
-                    <ul>
-                        <li><strong>Username:</strong> <code>any username</code></li>
-                        <li><strong>Password:</strong> <code>' OR 1=1 --</code></li>
-                    </ul>
-                    <p>This bypasses authentication by making the WHERE clause always true.</p>
-                    <a href="{{ url_for('logout') }}" class="btn btn-outline-primary btn-sm">Logout to Try</a>
-                </div>
-                <div class="list-group-item list-group-item-action">
-                    <h5>SQL Injection Demo (Customer Data)</h5>
-                    <p class="mb-1">Try adding a customer with <code>1=1</code> in the name:</p>
-                    <code>Test Customer' OR 1=1 --</code> or simply <code>1=1</code>
-                    <p>This will show all customers in the database due to the SQL injection vulnerability.</p>
-                    <a href="{{ url_for('add_customer') }}" class="btn btn-outline-primary btn-sm">Try It</a>
-                </div>
-                <div class="list-group-item list-group-item-action">
-                    <h5>Stored XSS in Customer Names</h5>
-                    <p class="mb-1">Try adding a customer with this JavaScript in the name:</p>
-                    <code>&lt;script&gt;alert("XSS Attack!");&lt;/script&gt;</code>
-                    <p>The script will execute whenever the customer list or details are viewed.</p>
-                    <a href="{{ url_for('add_customer') }}" class="btn btn-outline-primary btn-sm">Try It</a>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 {% endblock %}

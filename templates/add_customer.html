@@ -24,32 +24,6 @@
                     </form>
                 </div>
             </div>
-            
-            <div class="card mt-4 border-warning">
-                <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0">Security Vulnerability Demo</h5>
-                </div>
-                <div class="card-body">
-                    <p><strong>Stored XSS Vulnerability:</strong> This form is vulnerable to stored XSS attacks.</p>
-                    <p>Try entering this as a customer name:</p>
-                    <pre><code>&lt;script&gt;alert("XSS Attack!");&lt;/script&gt;</code></pre>
-                    <p>The script will be stored in the database and execute whenever the customer name is displayed.</p>
-                    <p>Other malicious examples:</p>
-                    <ul>
-                        <li><code>&lt;script&gt;document.body.style.backgroundColor = "red";&lt;/script&gt;</code></li>
-                        <li><code>&lt;img src="x" onerror="alert('XSS via image error event')"&gt;</code></li>
-                    </ul>
-                    
-                    <hr>
-                    
-                    <p><strong>SQL Injection Vulnerability:</strong> This form is also vulnerable to SQL injection attacks.</p>
-                    <p>Try entering a customer name that includes <code>1=1</code> to see all customers:</p>
-                    <pre><code>Test Customer' OR 1=1 --</code></pre>
-                    <p>Or simply:</p>
-                    <pre><code>1=1</code></pre>
-                    <p>This will trigger a SQL injection that returns all customer records in the database.</p>
-                </div>
-            </div>
         </div>
     </div>
 </div>
