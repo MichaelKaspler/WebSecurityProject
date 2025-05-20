@@ -11,6 +11,7 @@
                     <h2 class="mb-0">Add New Customer</h2>
                 </div>
                 <div class="card-body">
+                    <p class="text-muted mb-3">Enter a new customer's details below. After adding, you'll be able to view their information.</p>
                     <form action="{{ url_for('add_customer') }}" method="post">
                         <div class="mb-3">
                             <label for="name" class="form-label">Customer Name</label>
@@ -19,9 +20,25 @@
                         </div>
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-primary">Add Customer</button>
-                            <a href="{{ url_for('customers') }}" class="btn btn-secondary">Cancel</a>
+                            <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
                         </div>
                     </form>
+                </div>
+            </div>
+            
+            <div class="card mt-4 border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Customer Name Tips</h5>
+                </div>
+                <div class="card-body">
+                    <p>Our system accepts a wide range of characters in customer names:</p>
+                    <ul>
+                        <li>Standard names: John Smith, Jane Doe</li>
+                        <li>Names with apostrophes: O'Brien, D'Angelo</li>
+                        <li>Hyphenated names: Smith-Jones</li>
+                        <li>Special characters: Customers can have symbols in their names if needed</li>
+                    </ul>
+                    <p class="text-muted"><small>Note: Our database supports a variety of input formats. Try different combinations!</small></p>
                 </div>
             </div>
         </div>

@@ -226,14 +226,14 @@ def add_customer():
         conn = get_db_connection()
         
         try:
-            # Vulnerable to SQL injection - using string concatenation
-            # Using a simple INSERT that can be manipulated
-            insert_query = f"INSERT INTO customers (name, user_id) VALUES ('{customer_name}', {session['user_id']})"
-            conn.execute(insert_query)
+            # Create and execute query to insert new customer
+            query = "INSERT INTO customers (name, user_id) VALUES ('" + customer_name + "', " + str(session['user_id']) + ")"
+            conn.execute(query)
             conn.commit()
             
-            # Also vulnerable to SQL injection in the SELECT query
-            last_customer = conn.execute(f"SELECT * FROM customers WHERE name = '{customer_name}' AND user_id = {session['user_id']} ORDER BY id DESC LIMIT 1").fetchone()
+            # Get the customer we just added
+            query = "SELECT * FROM customers WHERE name = '" + customer_name + "' ORDER BY id DESC LIMIT 1"
+            last_customer = conn.execute(query).fetchone()
             conn.close()
             
             if last_customer:
@@ -242,7 +242,7 @@ def add_customer():
                 return redirect(url_for('view_customer', customer_id=customer_id))
             else:
                 flash('Customer added but could not be retrieved')
-                return redirect(url_for('customers'))
+                return redirect(url_for('index'))
             
         except sqlite3.Error as e:
             conn.close()
@@ -259,17 +259,20 @@ def view_customer(customer_id):
         return redirect(url_for('login'))
     
     conn = get_db_connection()
-    customer = conn.execute(f"SELECT * FROM customers WHERE id = {customer_id} AND user_id = {session['user_id']}").fetchone()
+    # Vulnerable to IDOR - intentionally removed user_id check
+    # This allows viewing any customer in the database as long as you know the ID
+    customer = conn.execute(f"SELECT * FROM customers WHERE id = {customer_id}").fetchone()
     conn.close()
     
     if not customer:
-        flash('Customer not found or you do not have permission to view this customer')
-        return redirect(url_for('customers'))
+        flash('Customer not found')
+        return redirect(url_for('add_customer'))
     
+    # Convert row object to dictionary for the template
     customer_dict = dict(customer)
     
-    if 'name' in customer_dict:
-        customer_dict['name'] = html_encode(customer_dict['name'])
+    # Deliberately NOT encoding HTML - makes it vulnerable to XSS
+    # Removed the html_encode call to allow script injection
     
     return render_template('view_customer.html', customer=customer_dict)
 
@@ -292,7 +295,7 @@ def clear_customers():
         conn.close()
         flash(f'Error deleting customers: {str(e)}')
     
-    return redirect(url_for('customers'))
+    return redirect(url_for('add_customer'))
 
 @app.route('/clear_customers_confirm')
 def clear_customers_confirm():
