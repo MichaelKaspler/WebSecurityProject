@@ -23,7 +23,6 @@ SMTP_USERNAME = os.getenv('SMTP_USERNAME')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
 
 def send_reset_email(email, reset_code):
-    # Debug: Print environment variables
     print(f"SMTP Server: {SMTP_SERVER}")
     print(f"SMTP Port: {SMTP_PORT}")
     print(f"SMTP Username: {SMTP_USERNAME}")
@@ -45,9 +44,9 @@ def send_reset_email(email, reset_code):
     
     try:
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.ehlo()  # Can be omitted
-        server.starttls()  # Secure the connection
-        server.ehlo()  # Can be omitted
+        server.ehlo() 
+        server.starttls()  
+        server.ehlo()  
         server.login(SMTP_USERNAME, SMTP_PASSWORD)
         server.send_message(msg)
         server.quit()
@@ -80,7 +79,6 @@ def init_db():
     finally:
         conn.close()
 
-# Initialize the database when the application starts
 init_db()
 
 def validate_password(password):
@@ -234,14 +232,12 @@ def register():
         conn = get_db_connection()
         
         try:
-            # Check if username exists
             username_check = f"SELECT username FROM users WHERE username = '{username}'"
             existing_username = conn.execute(username_check).fetchone()
             if existing_username:
                 flash('Username already exists')
                 return render_template('register.html')
             
-            # Check if email exists
             email_check = f"SELECT email FROM users WHERE email = '{email}'"
             existing_email = conn.execute(email_check).fetchone()
             if existing_email:
@@ -386,25 +382,20 @@ def forgot_password():
         
         conn = get_db_connection()
         
-        # Vulnerable: Direct string concatenation in SQL query
         query = f"SELECT * FROM users WHERE email = '{email}'"
         user = conn.execute(query).fetchone()
         
         if user:
-            # Generate SHA-1 hash as reset code
             reset_code = hashlib.sha1(str(time.time()).encode()).hexdigest()[:8]
             
-            # Store reset code in session (vulnerable: no expiration)
             session['reset_code'] = reset_code
             session['reset_email'] = email
             
-            # Send email with reset code
             if send_reset_email(email, reset_code):
                 flash('If a user with that email exists, you will receive a reset code in your email')
             else:
                 flash('Error sending reset code. Please try again.')
         else:
-            # For non-existing users, set a dummy reset code that will never match
             session['reset_code'] = 'dummy_code'
             session['reset_email'] = email
             flash('If a user with that email exists, you will receive a reset code in your email')
@@ -432,7 +423,6 @@ def reset_password():
             flash('Invalid reset code')
             return render_template('reset_password.html')
         
-        # Validate new password
         is_valid, error_message = validate_password(new_password)
         if not is_valid:
             flash(error_message)
@@ -441,7 +431,6 @@ def reset_password():
         conn = get_db_connection()
         
         try:
-            # Get user ID and check password history
             email = session['reset_email']
             user_query = f"SELECT id, password FROM users WHERE email = '{email}'"
             user = conn.execute(user_query).fetchone()
@@ -450,12 +439,10 @@ def reset_password():
                 flash('User not found')
                 return render_template('reset_password.html')
             
-            # Check current password
             if new_password == user['password']:
                 flash('New password must be different from your current password')
                 return render_template('reset_password.html')
             
-            # Check password history
             history_query = f"""
                 SELECT password FROM password_history 
                 WHERE user_id = {user['id']} 
@@ -469,17 +456,14 @@ def reset_password():
                     flash(f'New password cannot be one of your last {PASSWORD_CONFIG["password_history_size"]} passwords')
                     return render_template('reset_password.html')
             
-            # Update password
             update_query = f"UPDATE users SET password = '{new_password}' WHERE email = '{email}'"
             conn.execute(update_query)
-            
-            # Add to password history
+
             history_insert = f"INSERT INTO password_history (user_id, password) VALUES ({user['id']}, '{user['password']}')"
             conn.execute(history_insert)
             
             conn.commit()
             
-            # Clear reset session data
             session.pop('reset_code', None)
             session.pop('reset_email', None)
             
