@@ -13,7 +13,6 @@ FORBIDDEN_SUBSTRINGS = {
     'password',
     'pass123',
     'qwerty',
-    '123456',
     'abc123',
     'admin123',
     'welcome',

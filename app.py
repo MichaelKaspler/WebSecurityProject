@@ -4,11 +4,63 @@ from werkzeug import security
 import os
 import re
 import html
+import hashlib
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
 from config import PASSWORD_CONFIG, PASSWORD_ERROR_MESSAGES, LOGIN_CONFIG, FORBIDDEN_SUBSTRINGS
 import time
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  
+
+load_dotenv()
+
+SMTP_SERVER = os.getenv('SMTP_SERVER')
+SMTP_PORT = os.getenv('SMTP_PORT')
+SMTP_USERNAME = os.getenv('SMTP_USERNAME')
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
+
+def send_reset_email(email, reset_code):
+    # Debug: Print environment variables
+    print(f"SMTP Server: {SMTP_SERVER}")
+    print(f"SMTP Port: {SMTP_PORT}")
+    print(f"SMTP Username: {SMTP_USERNAME}")
+    print(f"SMTP Password: {'*' * len(SMTP_PASSWORD) if SMTP_PASSWORD else 'Not set'}")
+    
+    msg = MIMEMultipart()
+    msg['From'] = SMTP_USERNAME
+    msg['To'] = email
+    msg['Subject'] = "Password Reset Code"
+    
+    body = f"""
+    Your password reset code is: {reset_code}
+    
+    Please enter this code to reset your password.
+    If you didn't request this, please ignore this email.
+    """
+    
+    msg.attach(MIMEText(body, 'plain'))
+    
+    try:
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.ehlo()  # Can be omitted
+        server.starttls()  # Secure the connection
+        server.ehlo()  # Can be omitted
+        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except smtplib.SMTPAuthenticationError:
+        print("SMTP Authentication Error: Please check your email and app password")
+        return False
+    except smtplib.SMTPException as e:
+        print(f"SMTP Error: {str(e)}")
+        return False
+    except Exception as e:
+        print(f"Error sending email: {str(e)}")
+        return False
 
 def get_db_connection():
     conn = sqlite3.connect('database.db')
@@ -324,6 +376,98 @@ def clear_customers_confirm():
         return redirect(url_for('login'))
     
     return render_template('clear_customers.html')
+
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form['email']
+        
+        if not email:
+            flash('Email is required')
+            return render_template('forgot_password.html')
+        
+        conn = get_db_connection()
+        
+        # Vulnerable: Direct string concatenation in SQL query
+        query = f"SELECT * FROM users WHERE email = '{email}'"
+        user = conn.execute(query).fetchone()
+        
+        if user:
+            # Generate SHA-1 hash as reset code
+            reset_code = hashlib.sha1(str(time.time()).encode()).hexdigest()[:8]
+            
+            # Store reset code in session (vulnerable: no expiration)
+            session['reset_code'] = reset_code
+            session['reset_email'] = email
+            
+            # Send email with reset code
+            if send_reset_email(email, reset_code):
+                flash('Reset code has been sent to your email')
+                return redirect(url_for('reset_password'))
+            else:
+                flash('Error sending reset code. Please try again.')
+        else:
+            flash('Email not found')
+        
+        conn.close()
+    
+    return render_template('forgot_password.html')
+
+@app.route('/reset_password', methods=['GET', 'POST'])
+def reset_password():
+    if 'reset_code' not in session or 'reset_email' not in session:
+        flash('Invalid reset request')
+        return redirect(url_for('forgot_password'))
+    
+    if request.method == 'POST':
+        reset_code = request.form['reset_code']
+        new_password = request.form['new_password']
+        
+        if not reset_code or not new_password:
+            flash('All fields are required')
+            return render_template('reset_password.html')
+        
+        if reset_code != session['reset_code']:
+            flash('Invalid reset code')
+            return render_template('reset_password.html')
+        
+        # Validate new password
+        is_valid, error_message = validate_password(new_password)
+        if not is_valid:
+            flash(error_message)
+            return render_template('reset_password.html')
+        
+        conn = get_db_connection()
+        
+        try:
+            # Check password history
+            email = session['reset_email']
+            # Vulnerable: Direct string concatenation in SQL query
+            history_query = f"SELECT password FROM users WHERE email = '{email}'"
+            current_password = conn.execute(history_query).fetchone()['password']
+            
+            if new_password == current_password:
+                flash('New password must be different from your current password')
+                return render_template('reset_password.html')
+            
+            # Vulnerable: Direct string concatenation in SQL query
+            query = f"UPDATE users SET password = '{new_password}' WHERE email = '{email}'"
+            conn.execute(query)
+            conn.commit()
+            
+            # Clear reset session data
+            session.pop('reset_code', None)
+            session.pop('reset_email', None)
+            
+            flash('Password has been reset successfully')
+            return redirect(url_for('login'))
+            
+        except sqlite3.Error as e:
+            flash(f'Database error: {str(e)}')
+        finally:
+            conn.close()
+    
+    return render_template('reset_password.html')
 
 if __name__ == '__main__':
     init_db()
