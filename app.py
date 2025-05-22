@@ -70,34 +70,18 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     
-    table_exists = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='customers'").fetchone()
-       
-    if not table_exists:
-        try:
-            conn.execute('''
-            CREATE TABLE IF NOT EXISTS customers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                user_id INTEGER NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id)
-            )
-            ''')
-            conn.commit()
-            print("Customers table added to existing database")
-        except sqlite3.Error as e:
-            print(f"Error adding customers table: {e}")
-    
-    if not os.path.exists('database.db') or not conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchone():
-        try:
-            with open('schema.sql') as f:
-                conn.executescript(f.read())
-            conn.commit()
-            print("Database initialized successfully with full schema")
-        except sqlite3.Error as e:
-            print(f"Error initializing database: {e}")
-    
-    conn.close()
+    try:
+        with open('schema.sql') as f:
+            conn.executescript(f.read())
+        conn.commit()
+        print("Database initialized successfully with full schema")
+    except sqlite3.Error as e:
+        print(f"Error initializing database: {e}")
+    finally:
+        conn.close()
+
+# Initialize the database when the application starts
+init_db()
 
 def validate_password(password):
     if len(password) < PASSWORD_CONFIG['min_length']:
@@ -250,7 +234,21 @@ def register():
         conn = get_db_connection()
         
         try:
-            insert_query = "INSERT INTO users (username, email, password) SELECT '" + username + "', '" + email + "', '" + password + "' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = '" + username + "')"
+            # Check if username exists
+            username_check = f"SELECT username FROM users WHERE username = '{username}'"
+            existing_username = conn.execute(username_check).fetchone()
+            if existing_username:
+                flash('Username already exists')
+                return render_template('register.html')
+            
+            # Check if email exists
+            email_check = f"SELECT email FROM users WHERE email = '{email}'"
+            existing_email = conn.execute(email_check).fetchone()
+            if existing_email:
+                flash('Email already exists')
+                return render_template('register.html')
+            
+            insert_query = "INSERT INTO users (username, email, password) VALUES ('" + username + "', '" + email + "', '" + password + "')"
             conn.execute(insert_query)
             conn.commit()
             conn.close()
@@ -402,14 +400,17 @@ def forgot_password():
             
             # Send email with reset code
             if send_reset_email(email, reset_code):
-                flash('Reset code has been sent to your email')
-                return redirect(url_for('reset_password'))
+                flash('If a user with that email exists, you will receive a reset code in your email')
             else:
                 flash('Error sending reset code. Please try again.')
         else:
-            flash('Email not found')
+            # For non-existing users, set a dummy reset code that will never match
+            session['reset_code'] = 'dummy_code'
+            session['reset_email'] = email
+            flash('If a user with that email exists, you will receive a reset code in your email')
         
         conn.close()
+        return redirect(url_for('reset_password'))
     
     return render_template('forgot_password.html')
 
@@ -440,19 +441,42 @@ def reset_password():
         conn = get_db_connection()
         
         try:
-            # Check password history
+            # Get user ID and check password history
             email = session['reset_email']
-            # Vulnerable: Direct string concatenation in SQL query
-            history_query = f"SELECT password FROM users WHERE email = '{email}'"
-            current_password = conn.execute(history_query).fetchone()['password']
+            user_query = f"SELECT id, password FROM users WHERE email = '{email}'"
+            user = conn.execute(user_query).fetchone()
             
-            if new_password == current_password:
+            if not user:
+                flash('User not found')
+                return render_template('reset_password.html')
+            
+            # Check current password
+            if new_password == user['password']:
                 flash('New password must be different from your current password')
                 return render_template('reset_password.html')
             
-            # Vulnerable: Direct string concatenation in SQL query
-            query = f"UPDATE users SET password = '{new_password}' WHERE email = '{email}'"
-            conn.execute(query)
+            # Check password history
+            history_query = f"""
+                SELECT password FROM password_history 
+                WHERE user_id = {user['id']} 
+                ORDER BY created_at DESC 
+                LIMIT {PASSWORD_CONFIG['password_history_size']}
+            """
+            history = conn.execute(history_query).fetchall()
+            
+            for old_password in history:
+                if new_password == old_password['password']:
+                    flash(f'New password cannot be one of your last {PASSWORD_CONFIG["password_history_size"]} passwords')
+                    return render_template('reset_password.html')
+            
+            # Update password
+            update_query = f"UPDATE users SET password = '{new_password}' WHERE email = '{email}'"
+            conn.execute(update_query)
+            
+            # Add to password history
+            history_insert = f"INSERT INTO password_history (user_id, password) VALUES ({user['id']}, '{user['password']}')"
+            conn.execute(history_insert)
+            
             conn.commit()
             
             # Clear reset session data
@@ -470,6 +494,4 @@ def reset_password():
     return render_template('reset_password.html')
 
 if __name__ == '__main__':
-    init_db()
-    
     app.run(debug=True, port=5000)
