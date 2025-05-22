@@ -4,7 +4,7 @@ from werkzeug import security
 import os
 import re
 import html
-from config import PASSWORD_CONFIG, PASSWORD_ERROR_MESSAGES, LOGIN_CONFIG
+from config import PASSWORD_CONFIG, PASSWORD_ERROR_MESSAGES, LOGIN_CONFIG, FORBIDDEN_SUBSTRINGS
 import time
 
 app = Flask(__name__)
@@ -16,7 +16,6 @@ def get_db_connection():
     return conn
 
 def init_db():
-    """Initialize the database with the schema"""
     conn = get_db_connection()
     
     table_exists = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='customers'").fetchone()
@@ -49,14 +48,14 @@ def init_db():
     conn.close()
 
 def validate_password(password):
-    """
-    Validate password against configuration requirements
-    Returns (is_valid, error_message)
-    """
     if len(password) < PASSWORD_CONFIG['min_length']:
         return False, PASSWORD_ERROR_MESSAGES['min_length'].format(
             min_length=PASSWORD_CONFIG['min_length']
         )
+    
+    for forbidden in FORBIDDEN_SUBSTRINGS:
+        if forbidden.lower() in password.lower():
+            return False, PASSWORD_ERROR_MESSAGES['forbidden_substring']
     
     requirements_met = 0
     requirements_messages = []
@@ -108,7 +107,6 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Intentionally insecure login route for educational purposes"""
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -119,14 +117,11 @@ def login():
 
         conn = get_db_connection()
 
-        # First check if user exists and is blocked
-        # ❌ Insecure: Directly concatenating user input into the SQL query
         user_check_query = f"SELECT id FROM users WHERE username = '{username}'"
         user = conn.execute(user_check_query).fetchone()
 
         if user:
             user_id = user['id']
-            # Check if this specific user is blocked
             if 'login_attempts' in session:
                 all_attempts = session['login_attempts']
                 user_attempts = all_attempts.get(str(user_id), {'count': 0, 'block_time': 0})
@@ -139,11 +134,9 @@ def login():
                         flash(f'This account is temporarily blocked. Please try again in {remaining_time} seconds.')
                         return render_template('login.html')
                     else:
-                        # Reset attempts for this user if block time has expired
                         all_attempts[str(user_id)] = {'count': 0, 'block_time': 0}
                         session['login_attempts'] = all_attempts
 
-        # ❌ Insecure: Directly concatenating user input into the SQL query
         query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
 
         try:
@@ -151,7 +144,6 @@ def login():
 
             if users:
                 user = users[0]
-                # Reset login attempts for this user on successful login
                 if 'login_attempts' in session:
                     all_attempts = session['login_attempts']
                     all_attempts[str(user['id'])] = {'count': 0, 'block_time': 0}
@@ -165,8 +157,7 @@ def login():
                 conn.close()
                 return redirect(url_for('index'))
             else:
-                if user:  # Only increment attempts if user exists
-                    # Increment failed attempts for this specific user
+                if user:  
                     all_attempts = session.get('login_attempts', {})
                     user_attempts = all_attempts.get(str(user_id), {'count': 0, 'block_time': 0})
                     user_attempts['count'] = user_attempts.get('count', 0) + 1
@@ -190,13 +181,11 @@ def login():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """Naively vulnerable registration route"""
     if request.method == 'POST':
         username = request.form['username']
         email = request.form['email']
         password = request.form['password']
         
-        # Basic input validation
         if not username or not email or not password:
             flash('All fields are required')
             return render_template('register.html')
@@ -209,8 +198,6 @@ def register():
         conn = get_db_connection()
         
         try:
-            # Naively vulnerable: Direct string concatenation in SQL query
-            # Using UNION to bypass UNIQUE constraint
             insert_query = "INSERT INTO users (username, email, password) SELECT '" + username + "', '" + email + "', '" + password + "' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = '" + username + "')"
             conn.execute(insert_query)
             conn.commit()
@@ -228,7 +215,6 @@ def register():
 
 @app.route('/logout')
 def logout():
-    """Logout route"""
     session.clear()
     flash('You have been logged out')
     return redirect(url_for('login'))
@@ -236,7 +222,6 @@ def logout():
 
 @app.route('/customers')
 def customers():
-    """View customers page"""
     if 'user_id' not in session:
         flash('You must be logged in to view customers')
         return redirect(url_for('login'))
@@ -257,7 +242,6 @@ def html_encode(text):
 
 @app.route('/add_customer', methods=['GET', 'POST'])
 def add_customer():
-    """Add a new customer"""
     if 'user_id' not in session:
         flash('You must be logged in to add customers')
         return redirect(url_for('login'))
@@ -272,12 +256,10 @@ def add_customer():
         conn = get_db_connection()
         
         try:
-            # Create and execute query to insert new customer
             query = "INSERT INTO customers (name, user_id) VALUES ('" + customer_name + "', " + str(session['user_id']) + ")"
             conn.execute(query)
             conn.commit()
             
-            # Get the customer we just added
             query = "SELECT * FROM customers WHERE name = '" + customer_name + "' ORDER BY id DESC LIMIT 1"
             last_customer = conn.execute(query).fetchone()
             conn.close()
@@ -299,14 +281,11 @@ def add_customer():
 
 @app.route('/customer/<int:customer_id>')
 def view_customer(customer_id):
-    """View a specific customer"""
     if 'user_id' not in session:
         flash('You must be logged in to view customers')
         return redirect(url_for('login'))
     
     conn = get_db_connection()
-    # Vulnerable to IDOR - intentionally removed user_id check
-    # This allows viewing any customer in the database as long as you know the ID
     customer = conn.execute(f"SELECT * FROM customers WHERE id = {customer_id}").fetchone()
     conn.close()
     
@@ -314,17 +293,12 @@ def view_customer(customer_id):
         flash('Customer not found')
         return redirect(url_for('add_customer'))
     
-    # Convert row object to dictionary for the template
     customer_dict = dict(customer)
-    
-    # Deliberately NOT encoding HTML - makes it vulnerable to XSS
-    # Removed the html_encode call to allow script injection
     
     return render_template('view_customer.html', customer=customer_dict)
 
 @app.route('/clear_customers', methods=['POST'])
 def clear_customers():
-    """Delete all customers for the current user"""
     if 'user_id' not in session:
         flash('You must be logged in to delete customers')
         return redirect(url_for('login'))
@@ -345,7 +319,6 @@ def clear_customers():
 
 @app.route('/clear_customers_confirm')
 def clear_customers_confirm():
-    """Show confirmation page before deleting all customers"""
     if 'user_id' not in session:
         flash('You must be logged in to delete customers')
         return redirect(url_for('login'))

@@ -9,9 +9,27 @@ PASSWORD_CONFIG = {
     'password_history_size': 3,     
 }
 
+FORBIDDEN_SUBSTRINGS = {
+    'password',
+    'pass123',
+    'qwerty',
+    '123456',
+    'abc123',
+    'admin123',
+    'welcome',
+    'letmein',
+    'monkey123',
+    'dragon',
+    'baseball',
+    'football',
+    'superman',
+    'trustno1',
+    'iloveyou'
+}
+
 LOGIN_CONFIG = {
-    'max_attempts': 3,              # Maximum number of failed login attempts
-    'block_duration': 180,          # Block duration in seconds (3 minutes = 180 seconds)
+    'max_attempts': 3,              
+    'block_duration': 60,          
 }
 
 PASSWORD_ERROR_MESSAGES = {
@@ -21,7 +39,8 @@ PASSWORD_ERROR_MESSAGES = {
     'require_digit': 'Password must contain at least one digit.',
     'require_special_char': 'Password must contain at least one special character ({chars}).',
     'min_requirements': 'Password must meet all requirements (uppercase, lowercase, digit, special character).',
-    'password_history': 'Password cannot be one of your last {history_size} passwords.'
+    'password_history': 'Password cannot be one of your last {history_size} passwords.',
+    'forbidden_substring': 'Password contains a common or easily guessable pattern. Please choose a stronger password.'
 }
 
 LOGIN_ERROR_MESSAGES = {
