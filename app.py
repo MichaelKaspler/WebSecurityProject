@@ -4,7 +4,8 @@ from werkzeug import security
 import os
 import re
 import html
-from config import PASSWORD_CONFIG, PASSWORD_ERROR_MESSAGES
+from config import PASSWORD_CONFIG, PASSWORD_ERROR_MESSAGES, LOGIN_CONFIG
+import time
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  
@@ -118,6 +119,30 @@ def login():
 
         conn = get_db_connection()
 
+        # First check if user exists and is blocked
+        # ❌ Insecure: Directly concatenating user input into the SQL query
+        user_check_query = f"SELECT id FROM users WHERE username = '{username}'"
+        user = conn.execute(user_check_query).fetchone()
+
+        if user:
+            user_id = user['id']
+            # Check if this specific user is blocked
+            if 'login_attempts' in session:
+                all_attempts = session['login_attempts']
+                user_attempts = all_attempts.get(str(user_id), {'count': 0, 'block_time': 0})
+                
+                if user_attempts['count'] >= LOGIN_CONFIG['max_attempts']:
+                    block_time = user_attempts['block_time']
+                    current_time = time.time()
+                    if current_time - block_time < LOGIN_CONFIG['block_duration']:
+                        remaining_time = int(LOGIN_CONFIG['block_duration'] - (current_time - block_time))
+                        flash(f'This account is temporarily blocked. Please try again in {remaining_time} seconds.')
+                        return render_template('login.html')
+                    else:
+                        # Reset attempts for this user if block time has expired
+                        all_attempts[str(user_id)] = {'count': 0, 'block_time': 0}
+                        session['login_attempts'] = all_attempts
+
         # ❌ Insecure: Directly concatenating user input into the SQL query
         query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
 
@@ -126,6 +151,12 @@ def login():
 
             if users:
                 user = users[0]
+                # Reset login attempts for this user on successful login
+                if 'login_attempts' in session:
+                    all_attempts = session['login_attempts']
+                    all_attempts[str(user['id'])] = {'count': 0, 'block_time': 0}
+                    session['login_attempts'] = all_attempts
+                
                 session.clear()
                 session['user_id'] = user['id']
                 session['username'] = user['username']
@@ -134,7 +165,22 @@ def login():
                 conn.close()
                 return redirect(url_for('index'))
             else:
-                flash("Invalid username or password.")
+                if user:  # Only increment attempts if user exists
+                    # Increment failed attempts for this specific user
+                    all_attempts = session.get('login_attempts', {})
+                    user_attempts = all_attempts.get(str(user_id), {'count': 0, 'block_time': 0})
+                    user_attempts['count'] = user_attempts.get('count', 0) + 1
+                    
+                    if user_attempts['count'] >= LOGIN_CONFIG['max_attempts']:
+                        user_attempts['block_time'] = time.time()
+                        flash(f'Too many failed attempts. This account is blocked for {LOGIN_CONFIG["block_duration"]} seconds.')
+                    else:
+                        flash(f"Invalid username or password. {LOGIN_CONFIG['max_attempts'] - user_attempts['count']} attempts remaining.")
+                    
+                    all_attempts[str(user_id)] = user_attempts
+                    session['login_attempts'] = all_attempts
+                else:
+                    flash("Invalid username or password.")
         except sqlite3.Error as e:
             flash(f"Database error: {str(e)}")
         finally:
