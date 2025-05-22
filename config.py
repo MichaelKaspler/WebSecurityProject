@@ -6,6 +6,12 @@ PASSWORD_CONFIG = {
     'require_special_char': True,   
     'special_chars': '!@#$%^&*()-_=+[]{}|;:,.<>?',  
     'min_requirements': 4,          
+    'password_history_size': 3,     
+}
+
+LOGIN_CONFIG = {
+    'max_attempts': 3,              # Maximum number of failed login attempts
+    'block_duration': 180,          # Block duration in seconds (3 minutes = 180 seconds)
 }
 
 PASSWORD_ERROR_MESSAGES = {
@@ -14,5 +20,12 @@ PASSWORD_ERROR_MESSAGES = {
     'require_lowercase': 'Password must contain at least one lowercase letter.',
     'require_digit': 'Password must contain at least one digit.',
     'require_special_char': 'Password must contain at least one special character ({chars}).',
-    'min_requirements': 'Password must meet all requirements (uppercase, lowercase, digit, special character).'
+    'min_requirements': 'Password must meet all requirements (uppercase, lowercase, digit, special character).',
+    'password_history': 'Password cannot be one of your last {history_size} passwords.'
+}
+
+LOGIN_ERROR_MESSAGES = {
+    'max_attempts': 'Too many failed login attempts. Please try again in {minutes} minutes.',
+    'invalid_credentials': 'Invalid username or password.',
+    'account_blocked': 'Account is temporarily blocked. Please try again in {minutes} minutes.'
 }
