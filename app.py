@@ -107,7 +107,7 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Naively vulnerable login route"""
+    """Intentionally insecure login route for educational purposes"""
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -118,9 +118,9 @@ def login():
 
         conn = get_db_connection()
 
-        # Naively vulnerable: Direct string concatenation in SQL query
-        # Only check username to make SQL injection work
-        query = f"SELECT * FROM users WHERE username = '{username}'"
+        # ❌ Insecure: Directly concatenating user input into the SQL query
+        query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+
         try:
             users = conn.execute(query).fetchall()
 
