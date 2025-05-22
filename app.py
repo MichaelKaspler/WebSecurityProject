@@ -165,7 +165,7 @@ def register():
         try:
             # Naively vulnerable: Direct string concatenation in SQL query
             # Using UNION to bypass UNIQUE constraint
-            insert_query = f"INSERT INTO users (username, email, password) SELECT '{username}', '{email}', '{password}' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = '{username}')"
+            insert_query = "INSERT INTO users (username, email, password) SELECT '" + username + "', '" + email + "', '" + password + "' WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = '" + username + "')"
             conn.execute(insert_query)
             conn.commit()
             conn.close()
