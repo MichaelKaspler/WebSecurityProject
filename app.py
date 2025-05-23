@@ -52,10 +52,10 @@ def send_reset_email(email, reset_code):
         server.quit()
         return True
     except smtplib.SMTPAuthenticationError:
-        print("SMTP Authentication Error: Please check your email and app password")
+        print("SMTP authentication error")
         return False
     except smtplib.SMTPException as e:
-        print(f"SMTP Error: {str(e)}")
+        print(f"SMTP error: {str(e)}")
         return False
     except Exception as e:
         print(f"Error sending email: {str(e)}")
@@ -72,8 +72,7 @@ def init_db():
     try:
         with open('schema.sql') as f:
             conn.executescript(f.read())
-        conn.commit()
-        print("Database initialized successfully with full schema")
+        conn.commit() 
     except sqlite3.Error as e:
         print(f"Error initializing database: {e}")
     finally:
