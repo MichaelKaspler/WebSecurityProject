@@ -23,11 +23,6 @@ SMTP_USERNAME = os.getenv('SMTP_USERNAME')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
 
 def send_reset_email(email, reset_code):
-    print(f"SMTP Server: {SMTP_SERVER}")
-    print(f"SMTP Port: {SMTP_PORT}")
-    print(f"SMTP Username: {SMTP_USERNAME}")
-    print(f"SMTP Password: {'*' * len(SMTP_PASSWORD) if SMTP_PASSWORD else 'Not set'}")
-    
     msg = MIMEMultipart()
     msg['From'] = SMTP_USERNAME
     msg['To'] = email
